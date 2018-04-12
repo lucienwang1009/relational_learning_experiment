@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>关系型数据挖掘的稳定性研究</title>
+    <!-- 引入 echarts.js -->
+    <script src="https://cdn.bootcss.com/echarts/4.0.2/echarts.min.js"></script>
+    <script src="https://cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdn.bootcss.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    <link href="https://cdn.bootcss.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcss.com/semantic-ui/2.2.14/semantic.min.css" rel="stylesheet">
+    <script src="https://cdn.bootcss.com/semantic-ui/2.2.14/semantic.min.js"></script>
+    <script src="https://cdn.bootcss.com/handsontable/0.36.0/handsontable.min.js"></script>
+    <link href="https://cdn.bootcss.com/handsontable/0.36.0/handsontable.min.css" rel="stylesheet">
+    <script src="https://cdn.bootcss.com/js-cookie/latest/js.cookie.min.js"></script>
+    <script src="https://cdn.bootcss.com/echarts/4.0.4/extension/dataTool.js"></script>
+</head>
+
+<body data-gr-c-s-loaded="true">
+{#<div class="ui segment">#}
+<div class="ui secondary pointing menu">
+    <div class="item">关系型数据挖掘的稳定性研究</div>
+    <a class="active item" data-tab="generate_graph_tab">生成人工数据</a>
+    <a class="item" data-tab="stability_tab">稳定性实验</a>
+    <a class="item" data-tab="risk_bounds_tab">风险界实验</a>
+</div>
+{#</div>#}
+
+{#<div class="ui row"></div>#}
+
+<div class="ui active tab" data-tab="generate_graph_tab">
+    <div class="ui grid internally celled">
+        <div class="three wide column">
+            <h4 class="ui horizontal divider header">
+                <i class="tag icon"></i>
+                生成图
+            </h4>
+
+            <div class="container">
+                <form class="ui form" id="generate_graph_form">
+                    {% csrf_token %}
+                    <div class="field">
+                        <label for="graph_type">图类型</label>
+                        <div class="ui selection dropdown fluid" style="width: 100%;" id="graph_type_dropdown">
+                            <input type="hidden" name="graph_type" id="graph_type">
+                            <i class="dropdown icon"></i>
+                            <div class="default text">图类型</div>
+                            <div class="menu">
+                                <div class="item" data-value="2">Barabasi-Albert图</div>
+                                <div class="item" data-value="1">完全图</div>
+                                <div class="item" data-value="0">严重不平衡图</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="n_vertices">顶点个数</label>
+                        <input type="text" id="n_vertices" placeholder="顶点个数">
+                    </div>
+                    <div class="field">
+                        <label for="barabasi_m">Barabasi图的参数（如果需要）</label>
+                        <input type="number" id="barabasi_m" placeholder="Barabasi图参数">
+                    </div>
+                    <button class="ui primary button" id="generate_graph_bt" type="submit">生成图</button>
+                    <div class="ui error message"></div>
+                </form>
+            </div>
+
+
+            <h4 class="ui horizontal divider header">
+                <i class="database icon"></i>
+                生成数据
+            </h4>
+
+            <div class="divider"></div>
+            <div class="container">
+                <form class="ui form" id="generate_data_form">
+                    {% csrf_token %}
+                    <div class="field">
+                        <label for="graph_type">数据类型</label>
+                        <div class="ui selection dropdown fluid" style="width: 100%;" id="data_type_dropdown">
+                            <input type="hidden" name="graph_type" id="data_type">
+                            <i class="dropdown icon"></i>
+                            <div class="default text">数据类型</div>
+                            <div class="menu">
+                                <div class="item" data-value="0">分类</div>
+                                <div class="item" data-value="1">回归</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="n_visible_features">可见特征数</label>
+                        <input type="number" id="n_visible_features" placeholder="可见特征数">
+                    </div>
+                    <button class="ui primary button" id="generate_data_bt" type="submit">生成数据</button>
+                    <div class="ui error message"></div>
+                </form>
+            </div>
+        </div>
+
+        <div class="thirteen wide column">
+            <div class="ui grid">
+                <div class="eight wide column">
+                    <!-- 为ECharts准备一个具备大小（宽高）的Dom -->
+                    <div class="ui container segments">
+                        <label class="ui huge">数据图</label>
+                        <div id="graph_chart" style="width: 100%;height:500px;"></div>
+                        <div class="ui inverted dimmer" id="generate_graph_loader">
+                            <div class="ui text loader">加载中</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="eight wide column">
+                    <div class="ui container segments">
+                        <label class="ui huge">图中点度的分布</label>
+                        <div id="graph_degree_chart" style="width: 100%;height:500px;"></div>
+                        <div class="ui inverted dimmer" id="generate_pow_law_loader">
+                            <div class="ui text loader">加载中</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="ui container segment" style="height: 400px;">
+                <label class="ui huge">生成的数据</label>
+                <div id="dataset"></div>
+                <div class="ui inverted dimmer" id="generate_data_loader">
+                    <div class="ui text loader">加载中</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="ui tab" data-tab="stability_tab">
+    <div class="ui grid internally celled">
+        <div class="three wide column">
+
+            <div class="container">
+                <form class="ui form" id="stability_form">
+                    {% csrf_token %}
+                    <div class="field">
+                        <label for="stability_graph_type">图类型</label>
+                        <div class="ui selection dropdown fluid" style="width: 100%;"
+                             id="stability_graph_type_dropdown">
+                            <input type="hidden" name="graph_type" id="stability_graph_type">
+                            <i class="dropdown icon"></i>
+                            <div class="default text">图类型</div>
+                            <div class="menu">
+                                <div class="item" data-value="2">Barabasi-Albert图</div>
+                                <div class="item" data-value="1">完全图</div>
+                                <div class="item" data-value="0">严重不平衡图</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="stability_n_vertices">顶点个数</label>
+                        <input type="text" id="stability_n_vertices" placeholder="顶点个数，逗号分割">
+                    </div>
+                    <div class="field">
+                        <label for="stability_barabasi_m">Barabasi图的参数（如果需要）</label>
+                        <input type="number" id="stability_barabasi_m" placeholder="Barabasi图参数">
+                    </div>
+
+                    <div class="field">
+                        <label for="stability_data_type">数据类型</label>
+                        <div class="ui selection dropdown fluid" style="width: 100%;" id="stability_data_type_dropdown">
+                            <input type="hidden" name="graph_type" id="stability_data_type">
+                            <i class="dropdown icon"></i>
+                            <div class="default text">数据类型</div>
+                            <div class="menu">
+                                <div class="item" data-value="0">分类</div>
+                                <div class="item" data-value="1">回归</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="stability_n_visible_features">可见特征数</label>
+                        <input type="number" id="stability_n_visible_features" placeholder="可见特征数">
+                    </div>
+                    <div class="field">
+                        <label for="stability_n_experiments">重复实验次数</label>
+                        <input type="number" id="stability_n_experiments" placeholder="重复实验次数">
+                    </div>
+                    <button class="ui primary button" type="submit" id="stability_experiments_bt">开始实验</button>
+                    <div class="ui error message"></div>
+                </form>
+            </div>
+        </div>
+
+        <div class="thirteen wide column">
+            <!-- 为ECharts准备一个具备大小（宽高）的Dom -->
+            <div class="ui grid">
+                <div class="three wide column"></div>
+                <div class="ten wide column">
+                    <div class="ui container segments">
+                        <label class="ui huge">稳定性实验对比图</label>
+                        <div id="stability_echarts" style="width: 700px;height:500px;"></div>
+                        <div class="ui inverted dimmer" id="stability_echarts_loader">
+                            <div class="ui text loader">加载中</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="six wide column">
+                </div>
+            </div>
+            <div class="ui container segment" style="height: 400px;">
+                <label class="ui huge">稳定性实验结果</label>
+                <div id="stability_hot"></div>
+                <div class="ui inverted dimmer" id="stability_hot_loader">
+                    <div class="ui text loader">加载中</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="ui tab" data-tab="risk_bounds_tab">
+    <div class="ui grid internally celled">
+        <div class="three wide column">
+
+            <div class="container">
+                <form class="ui form" id="risk_bounds_form">
+                    {% csrf_token %}
+                    <div class="field">
+                        <label for="risk_bounds_graph_type">图类型</label>
+                        <div class="ui selection dropdown fluid" style="width: 100%;"
+                             id="risk_bounds_graph_type_dropdown">
+                            <input type="hidden" name="graph_type" id="risk_bounds_graph_type">
+                            <i class="dropdown icon"></i>
+                            <div class="default text">图类型</div>
+                            <div class="menu">
+                                <div class="item" data-value="1">完全图</div>
+                                <div class="item" data-value="0">严重不平衡图</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="risk_bounds_n_vertices">顶点个数</label>
+                        <input type="text" id="risk_bounds_n_vertices" placeholder="顶点个数，逗号分割">
+                    </div>
+                    <div class="field">
+                        <label for="risk_bounds_weighting_type_dropdow">对比的加权方式</label>
+                        <div class="ui selection dropdown fluid" style="width: 100%;"
+                             id="risk_bounds_weighting_type_dropdown">
+                            <input type="hidden" name="risk_bounds_weighting_type" id="risk_bounds_weighting_type">
+                            <i class="dropdown icon"></i>
+                            <div class="default text">加权方式</div>
+                            <div class="menu">
+                                <div class="item" data-value="1">最大独立集加权</div>
+                                <div class="item" data-value="2">严重不平衡的加权</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="risk_bounds_n_visible_features">可见特征数</label>
+                        <input type="number" id="risk_bounds_n_visible_features" placeholder="可见特征数">
+                    </div>
+                    <div class="field">
+                        <label for="risk_bounds_n_experiments">重复实验次数</label>
+                        <input type="number" id="risk_bounds_n_experiments" placeholder="重复实验次数">
+                    </div>
+                    <button class="ui primary button" type="submit" id="risk_bounds_experiments_bt">开始实验</button>
+                    <div class="ui error message"></div>
+                </form>
+            </div>
+        </div>
+
+        <div class="thirteen wide column">
+            <!-- 为ECharts准备一个具备大小（宽高）的Dom -->
+            <div class="ui grid">
+                <div class="three wide column"></div>
+                <div class="ten wide column">
+                    <div class="ui container segments">
+                        <label class="ui huge">风险界实验对比图</label>
+                        <div id="risk_bounds_echarts" style="width: 700px;height:500px;"></div>
+                        <div class="ui inverted dimmer" id="risk_bounds_echarts_loader">
+                            <div class="ui text loader">加载中</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="six wide column">
+                </div>
+            </div>
+            <div class="ui container segment" style="height: 400px;">
+                <label class="ui huge">风险界实验结果</label>
+                <div id="risk_bounds_hot"></div>
+                <div class="ui inverted dimmer" id="risk_bounds_hot_loader">
+                    <div class="ui text loader">加载中</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script type="text/javascript">
+    var graph_chart = echarts.init(document.getElementById('graph_chart'));
+    var graph_degree_chart = echarts.init(document.getElementById('graph_degree_chart'));
+    var dataset_viewer = document.getElementById('dataset');
+    var handsontable = null;
+    var stability_chart = echarts.init(document.getElementById('stability_echarts'));
+    var stability_hot = null;
+    var stability_hot_viewer = document.getElementById('stability_hot');
+
+
+    var risk_bounds_chart = echarts.init(document.getElementById('risk_bounds_echarts'));
+    var risk_bounds_hot = null;
+    var risk_bounds_hot_viewer = document.getElementById('risk_bounds_hot');
+
+    var drawed_graph = null;
+
+    window.onresize = function () {
+        graph_chart.resize();
+        graph_degree_chart.resize();
+        stability_chart.resize();
+        risk_bounds_chart.resize();
+    };
+
+    $('.menu .item').tab();
+
+    $('.ui.dropdown')
+        .dropdown();
+
+    $("#generate_graph_form").form({
+        fields: {
+            n_vertices: {
+                identifier: 'n_vertices',
+                rules: [
+                    {
+                        type: 'integer[1..100]',
+                        {#                        type: 'regExp[/^(\\d+)(,\\s*\\d+)*$/]',#}
+                        prompt: '请输入1到100的整数'
+                    }
+                ]
+            },
+            graph_type: {
+                identifier: 'graph_type',
+                rules: [
+                    {
+                        type: 'empty',
+                        prompt: '请选择生成图的类型'
+                    }
+                ]
+            },
+            barabasi_m: {
+                identifier: 'barabasi_m',
+                rules: [
+                    {
+                        type: 'integer[1..5]',
+                        prompt: '请选择1到5的整数'
+                    }
+                ]
+            },
+        },
+        onSuccess: function (e) {
+            //阻止表单的提交
+            e.preventDefault();
+
+            generate_graph();
+        }
+    });
+
+
+    $("#generate_data_form").form({
+        fields: {
+            data_type: {
+                identifier: 'data_type',
+                rules: [
+                    {
+                        type: 'empty',
+                        prompt: '请选择生成数据的类型'
+                    }
+                ]
+            },
+            n_visible_features: {
+                identifier: 'n_visible_features',
+                rules: [
+                    {
+                        type: 'integer[1..10]',
+                        prompt: '请输入1到10的整数'
+                    }
+                ]
+            }
+        },
+        onSuccess: function (e) {
+            //阻止表单的提交
+            e.preventDefault();
+            generate_data();
+        }
+    });
+
+
+    $("#stability_form").form({
+        fields: {
+            stability_n_vertices: {
+                identifier: 'stability_n_vertices',
+                rules: [
+                    {
+                        type: 'regExp[/^(\\d+)(,\\s*\\d+)*$/]',
+                        prompt: '请输入整数,用逗号隔开'
+                    }
+                ]
+            },
+            stability_graph_type: {
+                identifier: 'stability_graph_type',
+                rules: [
+                    {
+                        type: 'empty',
+                        prompt: '请选择生成图的类型'
+                    }
+                ]
+            },
+            stability_barabasi_m: {
+                identifier: 'stability_barabasi_m',
+                rules: [
+                    {
+                        type: 'integer[1..5]',
+                        prompt: '请选择1到5的整数'
+                    }
+                ]
+            },
+            stability_data_type: {
+                identifier: 'stability_data_type',
+                rules: [
+                    {
+                        type: 'empty',
+                        prompt: '请选择生成数据的类型'
+                    }
+                ]
+            },
+            stability_n_visible_features: {
+                identifier: 'stability_n_visible_features',
+                rules: [
+                    {
+                        type: 'integer[1..10]',
+                        prompt: '请输入1到10的整数'
+                    }
+                ]
+            },
+            stability_n_experiments: {
+                identifier: 'stability_n_experiments',
+                rules: [
+                    {
+                        type: 'integer[2..100]',
+                        prompt: '请输入2到100的整数'
+                    }
+                ]
+            }
+        },
+        onSuccess: function (e) {
+            //阻止表单的提交
+            e.preventDefault();
+            var list_n_vertices = $('#stability_n_vertices').val().split(',');
+            var graph_type = parseInt($('#stability_graph_type').val());
+            var flag = false
+            list_n_vertices.forEach(function (n_vertices) {
+                n_vertices = parseInt(n_vertices);
+                if (graph_type === 0 && n_vertices > 5000) {
+                    alert('严重不平衡图的点请小于等于5000');
+                    flag = true;
+                } else if (graph_type === 1 && n_vertices > 100) {
+                    alert('完全图的点请小于等于100');
+                    flag = true;
+                } else if (graph_type === 2 && n_vertices > 500) {
+                    alert('Barabasi-Albert图的点请小于等于500');
+                    flag = true;
+                }
+            });
+            if (!flag) {
+                stability_experiments();
+            }
+        }
+    });
+
+    $("#risk_bounds_form").form({
+        fields: {
+            risk_bounds_n_vertices: {
+                identifier: 'risk_bounds_n_vertices',
+                rules: [
+                    {
+                        type: 'regExp[/^(\\d+)(,\\s*\\d+)*$/]',
+                        prompt: '请输入整数,用逗号隔开'
+                    }
+                ]
+            },
+            risk_bounds_graph_type: {
+                identifier: 'risk_bounds_graph_type',
+                rules: [
+                    {
+                        type: 'empty',
+                        prompt: '请选择生成图的类型'
+                    }
+                ]
+            },
+            risk_bounds_n_visible_features: {
+                identifier: 'risk_bounds_n_visible_features',
+                rules: [
+                    {
+                        type: 'integer[1..10]',
+                        prompt: '请输入1到10的整数'
+                    }
+                ]
+            },
+            risk_bounds_weighting_type: {
+                identifier: 'risk_bounds_weighting_type',
+                rules: [
+                    {
+                        type: 'empty',
+                        prompt: '请选择使用的加权方式'
+                    }
+                ]
+            },
+            risk_bounds_n_experiments: {
+                identifier: 'risk_bounds_n_experiments',
+                rules: [
+                    {
+                        type: 'integer[2..100]',
+                        prompt: '请输入2到100的整数'
+                    }
+                ]
+            }
+        },
+        onSuccess: function (e) {
+            //阻止表单的提交
+            e.preventDefault();
+            var list_n_vertices = $('#risk_bounds_n_vertices').val().split(',');
+            var graph_type = parseInt($('#risk_bounds_graph_type').val());
+            var flag = false;
+            list_n_vertices.forEach(function (n_vertices) {
+                n_vertices = parseInt(n_vertices);
+                if (graph_type === 0 && n_vertices > 5000) {
+                    alert('严重不平衡图的点请小于等于5000');
+                    flag = true;
+                } else if (graph_type === 1 && n_vertices > 100) {
+                    alert('完全图的点请小于等于100');
+                    flag = true;
+                } else if (graph_type === 2 && n_vertices > 500) {
+                    alert('Barabasi-Albert图的点请小于等于500');
+                    flag = true;
+                }
+            });
+            if (!flag) {
+                risk_bounds_experiments();
+            }
+        }
+    });
+
+    $(function () {
+        $('#generate_graph_form')
+            .form('set values', {
+                n_vertices: Cookies.get('n_vertices'),
+                barabasi_m: Cookies.get('barabasi_m')
+            });
+        $('#generate_data_form')
+            .form('set values', {
+                n_visible_features: Cookies.get('n_visible_features')
+            });
+        $('#stability_form')
+            .form('set values', {
+                stability_n_vertices: Cookies.get('stability_n_vertices'),
+                stability_barabasi_m: Cookies.get('stability_barabasi_m'),
+                stability_n_visible_features: Cookies.get('stability_n_visible_features'),
+                stability_n_experiments: Cookies.get('stability_n_experiments')
+            });
+
+        $('#risk_bounds_form')
+            .form('set values', {
+                risk_bounds_n_vertices: Cookies.get('risk_bounds_n_vertices'),
+                risk_bounds_n_visible_features: Cookies.get('risk_bounds_n_visible_features'),
+                risk_bounds_n_experiments: Cookies.get('risk_bounds_n_experiments')
+            });
+        $('#graph_type_dropdown').dropdown("set selected", Cookies.get('graph_type'));
+        $('#data_type_dropdown').dropdown('set selected', Cookies.get('data_type'));
+        $('#stability_graph_type_dropdown').dropdown('set selected', Cookies.get('stability_graph_type'));
+        $('#stability_data_type_dropdown').dropdown('set selected', Cookies.get('stability_data_type'));
+        $('#risk_bounds_graph_type_dropdown').dropdown('set selected', Cookies.get('risk_bounds_graph_type'));
+        $('#risk_bounds_weighting_type_dropdown').dropdown('set selected', Cookies.get('risk_bounds_weighting_type'));
+    });
+
+    function generate_graph() {
+        $('#generate_graph_loader').addClass('active');
+        $('#generate_pow_law_loader').addClass('active');
+        $('#generate_graph_bt').addClass('disabled loading');
+
+        var $formData = new FormData();
+        var n_vertices = $("#n_vertices").val();
+        var barabasi_m = $("#barabasi_m").val();
+        var graph_type = $("#graph_type").val();
+        Cookies.set('n_vertices', n_vertices);
+        Cookies.set('barabasi_m', barabasi_m);
+        Cookies.set('graph_type', graph_type);
+        $formData.append("n_vertices", n_vertices);
+        $formData.append("barabasi_m", barabasi_m);
+        $formData.append("graph_type", graph_type);
+        $.ajax({
+            url: "{% url 'learning:draw_graph' %}",
+            type: "POST",
+            data: $formData,
+            contentType: false,
+            processData: false,
+            headers: {"X-CSRFToken": $('[name="csrfmiddlewaretoken"]').val()},
+            success: function (data) {
+                $('#generate_graph_bt').removeClass('disabled loading');
+                if (is_null(data)) {
+                    alert('服务器发生错误')
+                }
+                drawed_graph = data.drawed_graph;
+                draw_echarts_graph(graph_chart, drawed_graph);
+                power_law = data.power_law;
+                draw_echarts_power_law(graph_degree_chart, power_law);
+            },
+            error: function (xhr, errType, errContent) {
+                $('#generate_graph_bt').removeClass('disabled loading');
+                alert('服务器发生错误')
+            }
+        });
+    }
+
+
+    function generate_data() {
+        if (is_null(drawed_graph)) {
+            window.alert('请先生成图');
+            return;
+        }
+
+        $('#generate_data_loader').addClass('active');
+        $('#generate_data_bt').addClass('disabled loading');
+
+        var $formData = new FormData();
+        var data_type = $("#data_type").val();
+        var n_visible_features = $("#n_visible_features").val();
+        Cookies.set('data_type', data_type);
+        Cookies.set('n_visible_features', n_visible_features);
+        $formData.append("data_type", data_type);
+        $formData.append("n_visible_features", n_visible_features);
+        $.ajax({
+            url: "{% url 'learning:generate_data' %}",
+            type: "POST",
+            data: $formData,
+            contentType: false,
+            processData: false,
+            headers: {"X-CSRFToken": $('[name="csrfmiddlewaretoken"]').val()},
+            success: function (data) {
+                $('#generate_data_bt').removeClass('disabled loading');
+                if (is_null(data)) {
+                    alert('服务器发生错误')
+                }
+                show_dataset(dataset_viewer, data.dataset);
+            },
+            error: function (xhr, errType, errContent) {
+                $('#generate_data_bt').removeClass('disabled loading');
+                alert('服务器发生错误')
+            }
+        });
+    }
+
+    function stability_experiments() {
+        $('#stability_experiments_bt').addClass('disabled loading');
+        $('#stability_echarts_loader').addClass('active');
+        $('#stability_hot_loader').addClass('active');
+
+        var $formData = new FormData();
+        var n_vertices = $("#stability_n_vertices").val();
+        var barabasi_m = $("#stability_barabasi_m").val();
+        var graph_type = $("#stability_graph_type").val();
+        var data_type = $('#stability_data_type').val();
+        var n_visible_features = $('#stability_n_visible_features').val();
+        var n_experiments = $('#stability_n_experiments').val();
+        Cookies.set('stability_n_vertices', n_vertices);
+        Cookies.set('stability_barabasi_m', barabasi_m);
+        Cookies.set('stability_graph_type', graph_type);
+        Cookies.set('stability_data_type', data_type);
+        Cookies.set('stability_n_visible_features', n_visible_features);
+        Cookies.set('stability_n_experiments', n_experiments);
+        $formData.append("n_vertices", n_vertices);
+        $formData.append("barabasi_m", barabasi_m);
+        $formData.append("graph_type", graph_type);
+        $formData.append('data_type', data_type);
+        $formData.append('n_visible_features', n_visible_features);
+        $formData.append('n_experiments', n_experiments);
+        $.ajax({
+            url: "{% url 'learning:stability_experiments' %}",
+            type: "POST",
+            data: $formData,
+            contentType: false,
+            processData: false,
+            headers: {"X-CSRFToken": $('[name="csrfmiddlewaretoken"]').val()},
+            success: function (data) {
+                if (is_null(data)) {
+                    alert('服务器发生错误')
+                }
+                stability_results_show(data);
+            },
+            error: function (xhr, errType, errContent) {
+                alert('服务器发生错误')
+            }
+        });
+    }
+
+    function risk_bounds_experiments() {
+        $('#risk_bounds_experiments_bt').addClass('disabled loading');
+        $('#risk_bounds_echarts_loader').addClass('active');
+        $('#risk_bounds_hot_loader').addClass('active');
+
+        var $formData = new FormData();
+        var n_vertices = $("#risk_bounds_n_vertices").val();
+        var graph_type = $("#risk_bounds_graph_type").val();
+        var n_visible_features = $('#risk_bounds_n_visible_features').val();
+        var n_experiments = $('#risk_bounds_n_experiments').val();
+        var weighting_type = $('#risk_bounds_weighting_type').val();
+        Cookies.set('risk_bounds_n_vertices', n_vertices);
+        Cookies.set('risk_bounds_weighting_type', weighting_type);
+        Cookies.set('risk_bounds_graph_type', graph_type);
+        Cookies.set('risk_bounds_n_visible_features', n_visible_features);
+        Cookies.set('risk_bounds_n_experiments', n_experiments);
+        $formData.append("n_vertices", n_vertices);
+        $formData.append("graph_type", graph_type);
+        $formData.append('n_visible_features', n_visible_features);
+        $formData.append('n_experiments', n_experiments);
+        $formData.append('weighting_type', weighting_type);
+        $.ajax({
+            url: "{% url 'learning:risk_bounds_experiments' %}",
+            type: "POST",
+            data: $formData,
+            contentType: false,
+            processData: false,
+            headers: {"X-CSRFToken": $('[name="csrfmiddlewaretoken"]').val()},
+            success: function (data) {
+                if (is_null(data)) {
+                    alert('服务器发生错误')
+                }
+                risk_bounds_results_show(data);
+            },
+            error: function (xhr, errType, errContent) {
+                alert('服务器发生错误')
+            }
+        });
+    }
+
+    function draw_echarts_graph(myChart, data) {
+        $('#generate_graph_loader').removeClass('active');
+        var graph = data;
+        graph.nodes.forEach(function (node) {
+            node.name = node.id;
+        });
+        option = {
+            tooltip: {},
+            animationDuration: 1500,
+            animationEasingUpdate: 'quinticInOut',
+            series: [
+                {
+                    name: '数据图',
+                    type: 'graph',
+                    layout: 'none',
+                    data: graph.nodes,
+                    links: graph.links,
+                    roam: true,
+                    // label: {
+                    //     normal: {
+                    //         position: 'right'
+                    //     }
+                    // },
+                    lineStyle: {
+                        color: '#1862ab',
+                        width: 0.3
+                    }
+                }
+            ]
+        };
+
+        myChart.setOption(option);
+    }
+
+
+    function draw_echarts_power_law(myChart, data) {
+        $('#generate_pow_law_loader').removeClass('active');
+        option = {
+            tooltip: {
+                trigger: 'axis'
+            },
+            xAxis: {
+                name: '度的对数',
+                nameLocation: 'middle',
+                nameGap: 25
+            },
+            yAxis: {
+                name: '频数的对数',
+                nameLocation: 'middle',
+                nameGap: 30
+            },
+            animationDuration: 1500,
+            animationEasingUpdate: 'quinticInOut',
+            series: [
+                {
+                    name: '点度的幂律分布图',
+                    type: 'scatter',
+                    data: data
+                }
+            ]
+        };
+
+        myChart.setOption(option);
+    }
+
+    function show_dataset(myTable, data) {
+        $('#generate_data_loader').removeClass('active');
+        hot_show(handsontable, myTable, data);
+    }
+
+    function stability_results_show(data) {
+        $('#stability_experiments_bt').removeClass('disabled loading');
+        $('#stability_echarts_loader').removeClass('active');
+        $('#stability_hot_loader').removeClass('active');
+
+        console.log(data)
+        res = data.results;
+        hot_show(stability_hot, stability_hot_viewer, res);
+        results_show(stability_chart, data, data.equal, data.fmn, data.equal_mean, data.fmn_mean, $('#stability_n_vertices').val().split(',').sort(compare_str), '泛化误差');
+    }
+
+    function risk_bounds_results_show(data) {
+        $('#risk_bounds_experiments_bt').removeClass('disabled loading');
+        $('#risk_bounds_echarts_loader').removeClass('active');
+        $('#risk_bounds_hot_loader').removeClass('active');
+
+        res = data.results;
+        hot_show(risk_bounds_hot, risk_bounds_hot_viewer, res);
+        results_show(risk_bounds_chart, data, data.equal, data.fmn, data.equal_mean, data.fmn_mean, $('#risk_bounds_n_vertices').val().split(',').sort(compare_str), '测试误差');
+    }
+
+    function results_show(myCharts, data, equal_results, fmn_results, equal_mean_results, fmn_mean_results, x_labels, y_label) {
+        showed_data = [];
+        console.log(equal_results, fmn_results);
+        showed_data.push(echarts.dataTool.prepareBoxplotData(data.equal));
+        showed_data.push(echarts.dataTool.prepareBoxplotData(data.fmn));
+
+        option = {
+            tooltip: {
+                trigger: 'axis'
+            },
+            title: [{
+                text: ' ',
+                left: 'center'
+            },
+                {
+                    text: '上界: Q3 + 1.5 * IRQ \n下界: Q1 - 1.5 * IRQ',
+                    borderColor: '#999',
+                    borderWidth: 1,
+                    textStyle: {
+                        fontSize: 14
+                    },
+                    left: '70%',
+                    top: '10%'
+                }
+            ],
+            legend: {
+                y: '0%',
+                data: ['不加权算法', '加权算法','不加权算法平均值', '加权算法平均值']
+            },
+            grid: {
+                left: '10%',
+                top: '20%',
+                right: '10%',
+                bottom: '15%'
+            },
+            xAxis: {
+                type: 'category',
+                name: '顶点数',
+                data: x_labels,
+                boundaryGap: true,
+                nameGap: 30,
+                splitArea: {
+                    show: false
+                },
+                axisLabel: {
+                    formatter: x_labels
+                },
+                splitLine: {
+                    show: false
+                },
+                nameLocation: 'middle'
+            },
+            yAxis: {
+                type: 'value',
+                name: y_label,
+                nameLocation: 'middle',
+                nameGap: 40
+            },
+            series: [
+                {
+                    name: '不加权算法',
+                    type: 'boxplot',
+                    data: showed_data[0].boxData,
+                    tooltip: {formatter: formatter}
+                },
+                {
+                    name: '加权算法',
+                    type: 'boxplot',
+                    data: showed_data[1].boxData,
+                    tooltip: {formatter: formatter}
+                },
+                {
+                    name: '不加权算法平均值',
+                    type: 'line',
+                    data: equal_mean_results
+                },
+                {
+                    name: '加权算法平均值',
+                    type: 'line',
+                    data: fmn_mean_results
+                }
+            ]
+        };
+        myCharts.setOption(option);
+    }
+
+    function hot_show(hot, hot_viewer, data) {
+        $('#generate_data_loader').removeClass('active');
+        if (hot === null) {
+            hot = new Handsontable(hot_viewer, {
+                data: data.slice(1, data.length),
+                rowHeaders: true,
+                colHeaders: data[0],
+                width: 1100,
+                height: 350
+            });
+        } else {
+            hot.updateSettings({
+                data: data.slice(1, data.length),
+                colHeaders: data[0]
+            });
+            hot.render();
+        }
+    }
+
+    function formatter(param) {
+        return [
+            'Experiment ' + param.name + ': ',
+            'upper: ' + param.data[0],
+            'Q1: ' + param.data[1],
+            'median: ' + param.data[2],
+            'Q3: ' + param.data[3],
+            'lower: ' + param.data[4]
+        ].join('<br/>')
+    }
+    function compare_str(a, b) {
+        return parseInt(a) > parseInt(b);
+    }
+    function is_null(par) {
+        return par === null;
+    }
+</script>
+
+
+</body>
+</html>
